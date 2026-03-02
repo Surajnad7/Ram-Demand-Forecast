@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RAM Demand Forecast</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+:root{
+  --bg:#0a0a0c;
+  --surface:#141418;
+  --surface2:#1c1c22;
+  --border:#2a2a35;
+  --text:#eaeaf0;
+  --muted:#8888a0;
+  --accent:#6366f1;
+  --accent2:#818cf8;
+  --accent-glow:rgba(99,102,241,.15);
+  --green:#22c55e;
+  --red:#ef4444;
+  --amber:#f59e0b;
+  --blue:#3b82f6;
+  --radius:14px;
+  --radius-sm:8px;
+  --shadow:0 4px 32px rgba(0,0,0,.45);
+  --transition:all .18s cubic-bezier(.4,0,.2,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  display:flex;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+a{color:var(--accent);text-decoration:none}
+::selection{background:var(--accent);color:#fff}
+
+/* ═══════════ SIDEBAR ═══════════ */
+.sidebar{
+  width:240px;
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex;
+  flex-direction:column;
+  position:fixed;
+  top:0;left:0;bottom:0;
+  z-index:100;
+  transition:var(--transition);
+}
+.sidebar .logo{
+  padding:20px 20px 20px;
+  font-size:1.15rem;
+  font-weight:800;
+  letter-spacing:-.5px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  border-bottom:1px solid var(--border);
+}
+.sidebar .logo .logo-icon{
+  width:32px;height:32px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1rem;
+  flex-shrink:0;
+}
+.sidebar nav{flex:1;padding:8px 0;overflow-y:auto}
+.sidebar nav a{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:11px 20px;
+  color:var(--muted);
+  font-size:.875rem;
+  font-weight:500;
+  transition:var(--transition);
+  border-left:3px solid transparent;
+  cursor:pointer;
+  user-select:none;
+}
+.sidebar nav a:hover{
+  color:var(--text);
+  background:var(--accent-glow);
+}
+.sidebar nav a.active{
+  color:var(--text);
+  background:var(--accent-glow);
+  border-left-color:var(--accent);
+  font-weight:600;
+}
+.sidebar nav a .nav-icon{
+  width:20px;height:20px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.95rem;
+  flex-shrink:0;
+}
+
+.sidebar-footer{
+  padding:12px 16px;
+  border-top:1px solid var(--border);
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.sidebar-footer .toggle-btn{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 8px;
+  border-radius:var(--radius-sm);
+  cursor:pointer;
+  color:var(--muted);
+  font-size:.8rem;
+  transition:var(--transition);
+  border:none;background:none;
+  width:100%;
+  text-align:left;
+}
+.sidebar-footer .toggle-btn:hover{
+  color:var(--text);
+  background:var(--accent-glow);
+}
+
+/* ═══════════ MAIN ═══════════ */
+.main{
+  margin-left:240px;
+  flex:1;
+  padding:28px 36px;
+  max-width:1280px;
+  min-height:100vh;
+}
+.page{display:none;animation:fadeUp .22s ease}
+.page.active{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* ═══════════ TYPOGRAPHY ═══════════ */
+h1{
+  font-size:1.55rem;
+  font-weight:700;
+  letter-spacing:-.4px;
+  margin-bottom:4px;
+}
+h2{
+  font-size:1.1rem;
+  font-weight:600;
+  margin:28px 0 12px;
+  color:var(--accent);
+  letter-spacing:-.2px;
+}
+.subtitle{
+  color:var(--muted);
+  font-size:.85rem;
+  margin-bottom:24px;
+  line-height:1.5;
+}
+
+/* ═══════════ METRIC CARDS ═══════════ */
+.cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:14px;
+  margin-bottom:24px;
+}
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:18px 20px;
+  box-shadow:var(--shadow);
+  transition:var(--transition);
+  position:relative;
+  overflow:hidden;
+}
+.card::before{
+  content:'';
+  position:absolute;
+  top:0;left:0;right:0;
+  height:2px;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  opacity:0;
+  transition:var(--transition);
+}
+.card:hover::before{opacity:1}
+.card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.card .label{
+  font-size:.72rem;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.8px;
+  font-weight:600;
+}
+.card .value{
+  font-size:1.65rem;
+  font-weight:700;
+  margin-top:6px;
+  letter-spacing:-.5px;
+}
+.card .sub{
+  font-size:.75rem;
+  color:var(--muted);
+  margin-top:4px;
+}
+
+/* ═══════════ CHARTS ═══════════ */
+.chart-wrap{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:20px;
+  margin-bottom:24px;
+  box-shadow:var(--shadow);
+}
+canvas{width:100%!important;max-height:380px}
+
+/* ═══════════ TABLES ═══════════ */
+.table-container{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+  box-shadow:var(--shadow);
+}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border)}
+th{
+  color:var(--muted);
+  font-weight:600;
+  text-transform:uppercase;
+  font-size:.7rem;
+  letter-spacing:.6px;
+  background:var(--surface2);
+  position:sticky;
+  top:0;
+}
+tr:hover td{background:var(--accent-glow)}
+.table-scroll{max-height:480px;overflow-y:auto}
+
+/* ═══════════ CONTROLS ═══════════ */
+.controls{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  margin-bottom:20px;
+  flex-wrap:wrap;
+}
+.controls label{
+  font-size:.82rem;
+  color:var(--muted);
+  font-weight:500;
+}
+.controls input[type=range]{
+  flex:1;
+  accent-color:var(--accent);
+  min-width:120px;
+}
+.controls .val{
+  font-weight:700;
+  min-width:70px;
+  color:var(--accent);
+  font-size:.9rem;
+}
+.btn{
+  background:var(--accent);
+  color:#fff;
+  border:none;
+  padding:9px 22px;
+  border-radius:var(--radius-sm);
+  cursor:pointer;
+  font-size:.82rem;
+  font-weight:600;
+  transition:var(--transition);
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  letter-spacing:.2px;
+}
+.btn:hover{background:var(--accent2);transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn.danger{background:var(--red)}
+.btn.secondary{background:var(--surface2);border:1px solid var(--border);color:var(--text)}
+.btn.secondary:hover{border-color:var(--accent);background:var(--accent-glow)}
+
+/* ═══════════ CHAT ═══════════ */
+.chat-container{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+  box-shadow:var(--shadow);
+}
+.chat-messages{
+  padding:20px;
+  min-height:320px;
+  max-height:520px;
+  overflow-y:auto;
+}
+.chat-msg{
+  margin-bottom:18px;
+  line-height:1.65;
+  font-size:.87rem;
+  animation:fadeUp .2s ease;
+}
+.chat-msg.user{color:var(--accent)}
+.chat-msg.user strong{color:var(--accent2)}
+.chat-msg.bot{color:var(--text)}
+.chat-msg.bot table{margin:10px 0;font-size:.8rem}
+.chat-msg.bot table th{background:var(--surface2)}
+.chat-input-row{
+  display:flex;
+  gap:0;
+  border-top:1px solid var(--border);
+}
+.chat-input-row input{
+  flex:1;
+  padding:14px 18px;
+  border:none;
+  background:var(--surface2);
+  color:var(--text);
+  font-size:.87rem;
+  outline:none;
+}
+.chat-input-row input::placeholder{color:var(--muted)}
+.chat-input-row button{
+  padding:14px 24px;
+  background:var(--accent);
+  border:none;
+  color:#fff;
+  font-weight:600;
+  font-size:.82rem;
+  cursor:pointer;
+  transition:var(--transition);
+}
+.chat-input-row button:hover{background:var(--accent2)}
+
+/* ═══════════ STATUS ═══════════ */
+.status-bar{
+  padding:10px 16px;
+  border-radius:var(--radius-sm);
+  font-size:.82rem;
+  margin-bottom:16px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  animation:fadeUp .2s ease;
+}
+.status-bar.ok{
+  background:rgba(34,197,94,.08);
+  color:var(--green);
+  border:1px solid rgba(34,197,94,.2);
+}
+.status-bar.err{
+  background:rgba(239,68,68,.08);
+  color:var(--red);
+  border:1px solid rgba(239,68,68,.2);
+}
+.status-bar.warn{
+  background:rgba(245,158,11,.08);
+  color:var(--amber);
+  border:1px solid rgba(245,158,11,.2);
+}
+
+/* ═══════════ LOADING SKELETON ═══════════ */
+.skeleton{
+  background:linear-gradient(90deg,var(--surface2) 25%,var(--border) 50%,var(--surface2) 75%);
+  background-size:200% 100%;
+  animation:shimmer 1.5s infinite;
+  border-radius:var(--radius-sm);
+  height:20px;
+  margin:8px 0;
+}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ═══════════ BADGE ═══════════ */
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:2px 8px;
+  border-radius:20px;
+  font-size:.68rem;
+  font-weight:600;
+  letter-spacing:.3px;
+}
+.badge.pass{background:rgba(34,197,94,.12);color:var(--green)}
+.badge.fail{background:rgba(239,68,68,.12);color:var(--red)}
+
+/* ═══════════ LIGHT THEME ═══════════ */
+body.light{
+  --bg:#f8f9fb;
+  --surface:#ffffff;
+  --surface2:#f0f1f5;
+  --border:#e0e2ea;
+  --text:#1a1a2e;
+  --muted:#6b7280;
+  --accent-glow:rgba(99,102,241,.06);
+  --shadow:0 4px 24px rgba(0,0,0,.06);
+}
+
+/* ═══════════ RESPONSIVE ═══════════ */
+@media(max-width:768px){
+  .sidebar{width:64px}
+  .sidebar .logo span,.sidebar nav a span,.sidebar-footer .toggle-btn span{display:none}
+  .sidebar .logo{padding:16px;justify-content:center}
+  .sidebar nav a{padding:12px;justify-content:center}
+  .sidebar nav a .nav-icon{margin:0}
+  .main{margin-left:64px;padding:16px}
+  .cards{grid-template-columns:1fr 1fr}
+}
+@media(max-width:480px){
+  .cards{grid-template-columns:1fr}
+}
+
+/* ═══════════ SCROLLBAR ═══════════ */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ SIDEBAR ═══════════ -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-icon">💾</div>
+    <span>RAM Forecast</span>
+  </div>
+  <nav>
+    <a href="#dashboard" class="active" data-page="dashboard">
+      <span class="nav-icon">📊</span><span>Dashboard</span>
+    </a>
+    <a href="#forecast" data-page="forecast">
+      <span class="nav-icon">📈</span><span>Forecast</span>
+    </a>
+    <a href="#performance" data-page="performance">
+      <span class="nav-icon">🎯</span><span>Performance</span>
+    </a>
+    <a href="#data" data-page="data">
+      <span class="nav-icon">🗄️</span><span>Data Explorer</span>
+    </a>
+    <a href="#training" data-page="training">
+      <span class="nav-icon">⚙️</span><span>Training</span>
+    </a>
+    <a href="#assistant" data-page="assistant">
+      <span class="nav-icon">💬</span><span>Assistant</span>
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <button class="toggle-btn" onclick="toggleTheme()">
+      <span class="nav-icon" id="theme-icon">🌙</span><span>Dark Mode</span>
+    </button>
+  </div>
+</aside>
+
+<!-- ═══════════ MAIN CONTENT ═══════════ -->
+<div class="main">
+
+<!-- ════════════════════════════════════════════════════════════════════
+     DASHBOARD
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="page active" id="page-dashboard">
+  <h1>Dashboard</h1>
+  <p class="subtitle">Weekly 16 GB RAM unit demand at a glance</p>
+  <div class="cards" id="dash-cards">
+    <div class="card"><div class="skeleton" style="height:60px"></div></div>
+    <div class="card"><div class="skeleton" style="height:60px"></div></div>
+    <div class="card"><div class="skeleton" style="height:60px"></div></div>
+    <div class="card"><div class="skeleton" style="height:60px"></div></div>
+  </div>
+  <div class="chart-wrap"><canvas id="dash-chart"></canvas></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     FORECAST EXPLORER
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="page-forecast">
+  <h1>Forecast Explorer</h1>
+  <p class="subtitle">Adjust the horizon and explore predicted weekly demand for 16 GB RAM units</p>
+  <div class="controls">
+    <label>Horizon:</label>
+    <input type="range" id="fc-slider" min="1" max="12" value="3" />
+    <span class="val" id="fc-val">3 weeks</span>
+    <button class="btn" id="fc-btn" onclick="runForecast()">Generate Forecast</button>
+  </div>
+  <div class="chart-wrap"><canvas id="fc-chart"></canvas></div>
+  <div class="table-container" id="fc-table-wrap"></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     MODEL PERFORMANCE
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="page-performance">
+  <h1>Model Performance</h1>
+  <p class="subtitle">Quality metrics from the latest training run</p>
+  <div class="cards" id="perf-cards">
+    <div class="card"><div class="skeleton" style="height:60px"></div></div>
+    <div class="card"><div class="skeleton" style="height:60px"></div></div>
+    <div class="card"><div class="skeleton" style="height:60px"></div></div>
+    <div class="card"><div class="skeleton" style="height:60px"></div></div>
+  </div>
+  <div class="chart-wrap"><canvas id="perf-chart"></canvas></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     DATA EXPLORER
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="page-data">
+  <h1>Data Explorer</h1>
+  <p class="subtitle">Browse raw historical weekly data</p>
+  <div class="controls">
+    <label>Show last:</label>
+    <input type="range" id="data-slider" min="4" max="260" value="52" />
+    <span class="val" id="data-val">52 weeks</span>
+    <button class="btn" onclick="loadData()">Load</button>
+  </div>
+  <div class="table-container" id="data-table-wrap"></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     TRAINING
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="page-training">
+  <h1>Training</h1>
+  <p class="subtitle">Trigger a full model retrain — runs cross-validation, hold-out scoring, and quality gate</p>
+  <div id="train-status"></div>
+  <button class="btn" id="train-btn" onclick="triggerTrain()">🚀 Start Training</button>
+  <div id="train-result" style="margin-top:24px"></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     ASSISTANT
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="page-assistant">
+  <h1>Ask Assistant</h1>
+  <p class="subtitle">Natural-language Q&A about your 16 GB RAM demand data</p>
+  <div class="chat-container">
+    <div class="chat-messages" id="chat-box"></div>
+    <div class="chat-input-row">
+      <input id="chat-input" placeholder="e.g. What is the forecast for next 3 weeks?" onkeydown="if(event.key==='Enter')askAssistant()" />
+      <button onclick="askAssistant()">Send</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<script>
+/* ═══════════ ROUTING — instant, 0ms, no toast ═══════════ */
+const pages = document.querySelectorAll('.page');
+const navLinks = document.querySelectorAll('.sidebar nav a');
+
+function navigate(page) {
+  pages.forEach(p => p.classList.remove('active'));
+  navLinks.forEach(l => l.classList.remove('active'));
+  const el = document.getElementById('page-' + page);
+  if (el) el.classList.add('active');
+  const ln = document.querySelector(`[data-page="${page}"]`);
+  if (ln) ln.classList.add('active');
+  if (page === 'dashboard') loadDashboard();
+  if (page === 'performance') loadPerformance();
+}
+
+window.addEventListener('hashchange', () => navigate(location.hash.slice(1) || 'dashboard'));
+navLinks.forEach(l => l.addEventListener('click', e => {
+  e.preventDefault();
+  const p = l.dataset.page;
+  history.pushState(null, '', '#' + p);
+  navigate(p);
+}));
+
+/* ═══════════ THEME ═══════════ */
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  const isLight = document.body.classList.contains('light');
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+  document.getElementById('theme-icon').textContent = isLight ? '☀️' : '🌙';
+}
+if (localStorage.getItem('theme') === 'light') {
+  document.body.classList.add('light');
+  document.getElementById('theme-icon').textContent = '☀️';
+}
+
+/* ═══════════ CHARTS REGISTRY ═══════════ */
+const charts = {};
+const chartColors = {
+  accent: '#6366f1',
+  accent2: '#818cf8',
+  green: '#22c55e',
+  red: '#ef4444',
+  amber: '#f59e0b',
+  blue: '#3b82f6',
+  grid: '#1e1e28',
+  gridLight: '#e5e7eb',
+  text: '#8888a0',
+};
+
+function getGridColor() {
+  return document.body.classList.contains('light') ? chartColors.gridLight : chartColors.grid;
+}
+function getTextColor() {
+  return document.body.classList.contains('light') ? '#6b7280' : chartColors.text;
+}
+function makeChart(id, cfg) {
+  if (charts[id]) charts[id].destroy();
+  cfg.options = cfg.options || {};
+  cfg.options.animation = { duration: 350, easing: 'easeOutQuart' };
+  charts[id] = new Chart(document.getElementById(id), cfg);
+  return charts[id];
+}
+
+/* ═══════════ DASHBOARD ═══════════ */
+async function loadDashboard() {
+  try {
+    const [sum, hist, fc] = await Promise.all([
+      fetch('/api/summary').then(r => r.json()),
+      fetch('/api/history?limit=52').then(r => r.json()),
+      fetch('/predict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"horizon":3}' }).then(r => r.json()),
+    ]);
+
+    const c = document.getElementById('dash-cards');
+    const m = sum.metrics || {};
+    const rt = sum.recent_trend || {};
+    c.innerHTML = `
+      <div class="card">
+        <div class="label">Avg Units (4w)</div>
+        <div class="value">${(rt.avg_units_4w || 0).toLocaleString()}</div>
+        <div class="sub">weekly average</div>
+      </div>
+      <div class="card">
+        <div class="label">Avg Spot Price</div>
+        <div class="value">$${rt.avg_price_4w || '—'}</div>
+        <div class="sub">last 4 weeks</div>
+      </div>
+      <div class="card">
+        <div class="label">Model MAPE</div>
+        <div class="value">${m.mape ? (m.mape * 100).toFixed(1) + '%' : '—'}</div>
+        <div class="sub">hold-out error</div>
+      </div>
+      <div class="card">
+        <div class="label">R²</div>
+        <div class="value">${m.r2?.toFixed(4) || '—'}</div>
+        <div class="sub">${m.quality_gate_passed ? '<span class="badge pass">PASS</span>' : m.r2 ? '<span class="badge fail">FAIL</span>' : '—'}</div>
+      </div>
+    `;
+
+    const hd = hist.data || [];
+    const fd = fc.forecasts || [];
+    const labels = [...hd.map(r => r.ds), ...fd.map(r => r.ds)];
+    const actual = hd.map(r => r.units_sold);
+    const predicted = [...new Array(hd.length).fill(null), ...fd.map(r => r.yhat)];
+    const lower = [...new Array(hd.length).fill(null), ...fd.map(r => r.yhat_lower)];
+    const upper = [...new Array(hd.length).fill(null), ...fd.map(r => r.yhat_upper)];
+
+    makeChart('dash-chart', {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Actual Units Sold',
+            data: [...actual, ...new Array(fd.length).fill(null)],
+            borderColor: chartColors.accent,
+            backgroundColor: 'rgba(99,102,241,.08)',
+            fill: true,
+            tension: .35,
+            pointRadius: 0,
+            borderWidth: 2,
+          },
+          {
+            label: 'Forecast',
+            data: predicted,
+            borderColor: chartColors.green,
+            borderDash: [6, 3],
+            tension: .35,
+            pointRadius: 3,
+            pointBackgroundColor: chartColors.green,
+            borderWidth: 2,
+          },
+          {
+            label: 'Upper 95%',
+            data: upper,
+            borderColor: 'transparent',
+            backgroundColor: 'rgba(34,197,94,.06)',
+            fill: '+1',
+            pointRadius: 0,
+          },
+          {
+            label: 'Lower 95%',
+            data: lower,
+            borderColor: 'transparent',
+            backgroundColor: 'rgba(34,197,94,.06)',
+            fill: '-1',
+            pointRadius: 0,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: getTextColor(), usePointStyle: true, pointStyle: 'circle', padding: 16, font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: getTextColor(), maxTicksLimit: 12, font: { size: 10 } }, grid: { color: getGridColor() } },
+          y: { ticks: { color: getTextColor(), font: { size: 10 } }, grid: { color: getGridColor() } },
+        },
+      },
+    });
+  } catch (e) { console.error(e); }
+}
+
+/* ═══════════ FORECAST EXPLORER ═══════════ */
+const fcSlider = document.getElementById('fc-slider');
+const fcVal = document.getElementById('fc-val');
+fcSlider.addEventListener('input', () => fcVal.textContent = fcSlider.value + ' weeks');
+
+async function runForecast() {
+  const btn = document.getElementById('fc-btn');
+  btn.disabled = true;
+  btn.textContent = 'Loading…';
+  try {
+    const r = await fetch('/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ horizon: +fcSlider.value }),
+    });
+    const d = await r.json();
+    const fc = d.forecasts || [];
+
+    makeChart('fc-chart', {
+      type: 'bar',
+      data: {
+        labels: fc.map(r => r.ds),
+        datasets: [{
+          label: 'Forecast (units)',
+          data: fc.map(r => r.yhat),
+          backgroundColor: 'rgba(99,102,241,.72)',
+          hoverBackgroundColor: 'rgba(129,140,248,.9)',
+          borderRadius: 6,
+          borderSkipped: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: getTextColor(), usePointStyle: true, pointStyle: 'rect', padding: 16, font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: getTextColor(), font: { size: 10 } }, grid: { color: getGridColor() } },
+          y: { ticks: { color: getTextColor(), font: { size: 10 } }, grid: { color: getGridColor() } },
+        },
+      },
+    });
+
+    let tbl = '<div class="table-scroll"><table><tr><th>Week Starting</th><th>Forecast</th><th>Lower 95%</th><th>Upper 95%</th></tr>';
+    fc.forEach(r => {
+      tbl += `<tr><td>${r.ds}</td><td>${r.yhat.toLocaleString()}</td><td>${r.yhat_lower.toLocaleString()}</td><td>${r.yhat_upper.toLocaleString()}</td></tr>`;
+    });
+    tbl += '</table></div>';
+    document.getElementById('fc-table-wrap').innerHTML = tbl;
+  } catch (e) { console.error(e); }
+  btn.disabled = false;
+  btn.textContent = 'Generate Forecast';
+}
+
+/* ═══════════ PERFORMANCE ═══════════ */
+async function loadPerformance() {
+  try {
+    const [m, hist] = await Promise.all([
+      fetch('/api/metrics').then(r => r.json()),
+      fetch('/api/history?limit=52').then(r => r.json()),
+    ]);
+
+    const c = document.getElementById('perf-cards');
+    c.innerHTML = `
+      <div class="card">
+        <div class="label">MAPE</div>
+        <div class="value">${(m.mape * 100).toFixed(2)}%</div>
+        <div class="sub">≤ 10% threshold</div>
+      </div>
+      <div class="card">
+        <div class="label">RMSE</div>
+        <div class="value">${m.rmse?.toFixed(0)}</div>
+        <div class="sub">≤ 900 units</div>
+      </div>
+      <div class="card">
+        <div class="label">MAE</div>
+        <div class="value">${m.mae?.toFixed(0)}</div>
+        <div class="sub">≤ 650 units</div>
+      </div>
+      <div class="card">
+        <div class="label">R²</div>
+        <div class="value">${m.r2?.toFixed(4)}</div>
+        <div class="sub">≥ 0.85</div>
+      </div>
+      <div class="card">
+        <div class="label">CV MAPE</div>
+        <div class="value">${m.cv_mape ? (m.cv_mape * 100).toFixed(2) + '%' : '—'}</div>
+        <div class="sub">cross-validated</div>
+      </div>
+      <div class="card">
+        <div class="label">Quality Gate</div>
+        <div class="value">${m.quality_gate_passed ? '<span class="badge pass">✅ PASS</span>' : '<span class="badge fail">❌ FAIL</span>'}</div>
+        <div class="sub">${m.train_weeks || '?'} train / ${m.holdout_weeks || '?'} holdout weeks</div>
+      </div>
+    `;
+
+    const hd = (hist.data || []).slice(-52);
+    makeChart('perf-chart', {
+      type: 'line',
+      data: {
+        labels: hd.map(r => r.ds),
+        datasets: [{
+          label: 'Units Sold (last 52w)',
+          data: hd.map(r => r.units_sold),
+          borderColor: chartColors.accent,
+          backgroundColor: 'rgba(99,102,241,.06)',
+          fill: true,
+          tension: .35,
+          pointRadius: 2,
+          pointHoverRadius: 5,
+          pointBackgroundColor: chartColors.accent,
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: getTextColor(), usePointStyle: true, pointStyle: 'circle', padding: 16, font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: getTextColor(), maxTicksLimit: 12, font: { size: 10 } }, grid: { color: getGridColor() } },
+          y: { ticks: { color: getTextColor(), font: { size: 10 } }, grid: { color: getGridColor() } },
+        },
+      },
+    });
+  } catch (e) { console.error(e); }
+}
+
+/* ═══════════ DATA EXPLORER ═══════════ */
+const dataSlider = document.getElementById('data-slider');
+const dataVal = document.getElementById('data-val');
+dataSlider.addEventListener('input', () => dataVal.textContent = dataSlider.value + ' weeks');
+
+async function loadData() {
+  try {
+    const r = await fetch(`/api/history?limit=${dataSlider.value}`);
+    const d = await r.json();
+    const rows = d.data || [];
+    let tbl = '<div class="table-scroll"><table><tr><th>Week</th><th>Units</th><th>Price $</th><th>Temp °F</th><th>Holiday</th><th>B2S</th><th>Black Fri</th><th>Prime Day</th><th>Supply %</th><th>GPU Launch</th></tr>';
+    rows.forEach(r => {
+      tbl += `<tr>
+        <td>${r.ds}</td>
+        <td>${r.units_sold.toLocaleString()}</td>
+        <td>$${r.avg_spot_price_usd}</td>
+        <td>${r.avg_temperature_f}</td>
+        <td>${r.is_holiday_week ? '✅' : ''}</td>
+        <td>${r.is_back_to_school ? '✅' : ''}</td>
+        <td>${r.is_black_friday_week ? '✅' : ''}</td>
+        <td>${r.is_prime_day_week ? '✅' : ''}</td>
+        <td>${(r.pct_supply_constraint * 100).toFixed(1)}%</td>
+        <td>${r.new_gpu_launch ? '✅' : ''}</td>
+      </tr>`;
+    });
+    tbl += '</table></div>';
+    document.getElementById('data-table-wrap').innerHTML = tbl;
+  } catch (e) { console.error(e); }
+}
+
+/* ═══════════ TRAINING ═══════════ */
+async function triggerTrain() {
+  const btn = document.getElementById('train-btn');
+  btn.disabled = true;
+  btn.textContent = 'Training…';
+  document.getElementById('train-status').innerHTML = '<div class="status-bar warn">⏳ Training in progress — cross-validation, hold-out scoring, quality gate…</div>';
+  try {
+    const r = await fetch('/train', { method: 'POST' });
+    const d = await r.json();
+    const m = d.metrics || {};
+    const gate = m.quality_gate_passed;
+    document.getElementById('train-status').innerHTML = `<div class="status-bar ${gate ? 'ok' : 'err'}">${gate ? '✅ Quality gate PASSED' : '❌ Quality gate FAILED'}</div>`;
+    document.getElementById('train-result').innerHTML = `<div class="cards">
+      <div class="card"><div class="label">MAPE</div><div class="value">${(m.mape * 100).toFixed(2)}%</div></div>
+      <div class="card"><div class="label">RMSE</div><div class="value">${m.rmse?.toFixed(0)}</div></div>
+      <div class="card"><div class="label">MAE</div><div class="value">${m.mae?.toFixed(0)}</div></div>
+      <div class="card"><div class="label">R²</div><div class="value">${m.r2?.toFixed(4)}</div></div>
+    </div>`;
+  } catch (e) {
+    document.getElementById('train-status').innerHTML = '<div class="status-bar err">❌ Training failed: ' + e.message + '</div>';
+  }
+  btn.disabled = false;
+  btn.textContent = '🚀 Start Training';
+}
+
+/* ═══════════ ASSISTANT ═══════════ */
+async function askAssistant() {
+  const inp = document.getElementById('chat-input');
+  const q = inp.value.trim();
+  if (!q) return;
+  const box = document.getElementById('chat-box');
+  box.innerHTML += `<div class="chat-msg user">💾 <strong>You:</strong> ${q}</div>`;
+  inp.value = '';
+  try {
+    const r = await fetch(`/api/assistant?q=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    box.innerHTML += `<div class="chat-msg bot">${marked.parse(d.answer || 'No answer.')}</div>`;
+  } catch (e) {
+    box.innerHTML += `<div class="chat-msg bot" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+/* ═══════════ INIT ═══════════ */
+navigate(location.hash.slice(1) || 'dashboard');
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "ram-demand-forecast"
+version = "1.0.0"
+description = "Weekly 16 GB RAM unit demand forecast — Prophet + FastAPI + SPA"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "prophet>=1.1.5",
+    "pandas>=2.1",
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+    "joblib>=1.3",
+    "pydantic>=2.5",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0", "httpx>=0.27"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
