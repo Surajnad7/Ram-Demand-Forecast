@@ -122,8 +122,10 @@ class TestFeatures:
     def test_prophet_has_regressors(self):
         from src.features import configure_prophet, REGRESSORS
         m = configure_prophet()
-        extra = [r["name"] for r in m.extra_regressors.values()] if hasattr(m, "extra_regressors") else []
-        # Prophet stores regressors differently — just check config ran
+        # Prophet stores regressors as dict keyed by name
+        extra = list(m.extra_regressors.keys()) if hasattr(m, "extra_regressors") else []
+        for reg in REGRESSORS:
+            assert reg in extra, f"Regressor {reg} not found in Prophet model"
         assert m.yearly_seasonality == 6
         assert m.weekly_seasonality is False
 
